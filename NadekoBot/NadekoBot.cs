@@ -2,89 +2,110 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
-using Parse;
 using Discord.Commands;
 using NadekoBot.Modules;
 using Discord.Modules;
 using Discord.Audio;
-using NadekoBot.Extensions;
-using System.Timers;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using NadekoBot.Classes.JSONModels;
+using NadekoBot.Commands;
 
 namespace NadekoBot {
-    class NadekoBot {
-        public static DiscordClient client;
-        public static string botMention;
-        public static string GoogleAPIKey = null;
-        public static ulong OwnerID;
-        public static User OwnerUser = null;
-        public static string password;
-        public static string TrelloAppKey;
-        public static bool ForwardMessages = false;
+    internal class NadekoBot {
+        public static DiscordClient Client;
+        public static Credentials Creds { get; set; }
+        public static Configuration Config { get; set; }
+        public static LocalizedStrings Locale { get; set; } = new LocalizedStrings();
+        public static string BotMention { get; set; } = "";
 
-        static void Main() {
-            //load credentials from credentials.json
-            Credentials c;
-            bool loadTrello = false;
+        private static Channel OwnerPrivateChannel { get; set; }
+
+        private static void Main() {
+            Console.OutputEncoding = Encoding.Unicode;
+            // generate credentials example so people can know about the changes i make
             try {
-                c = JsonConvert.DeserializeObject<Credentials>(File.ReadAllText("credentials.json"));
-                botMention = c.BotMention;
-                if (c.GoogleAPIKey == null || c.GoogleAPIKey == "") {
-                    Console.WriteLine("No google api key found. You will not be able to use music and links won't be shortened.");
-                } else {
-                    Console.WriteLine("Google API key provided.");
-                    GoogleAPIKey = c.GoogleAPIKey;
-                }
-                if (c.TrelloAppKey == null || c.TrelloAppKey == "") {
-                    Console.WriteLine("No trello appkey found. You will not be able to use trello commands.");
-                } else {
-                    Console.WriteLine("Trello app key provided.");
-                    TrelloAppKey = c.TrelloAppKey;
-                    loadTrello = true;
-                }
-                if (c.ForwardMessages != true)
-                    Console.WriteLine("Not forwarding messages.");
-                else {
-                    ForwardMessages = true;
-                    Console.WriteLine("Forwarding messages.");
-                }
-                if (c.ParseKey == null || c.ParseID == null || c.ParseID == "" || c.ParseKey == "") {
-                    Console.WriteLine("Parse key and/or ID not found. Those are mandatory.");
-                    Console.ReadKey();
-                    return;
-                }
+                File.WriteAllText("credentials_example.json", JsonConvert.SerializeObject(new Credentials(), Formatting.Indented));
+                File.WriteAllText("data/config_example.json", JsonConvert.SerializeObject(new Configuration(), Formatting.Indented));
+            } catch {
+                Console.WriteLine("Failed writing credentials_example.json or data/config_example.json");
+            }
 
-                //init parse
-                ParseClient.Initialize(c.ParseID, c.ParseKey);
+            try {
+                Config = JsonConvert.DeserializeObject<Configuration>(File.ReadAllText("data/config.json"));
+            } catch {
+                Console.WriteLine("Failed loading configuration.");
+            }
 
-                OwnerID = c.OwnerID;
-                password = c.Password;
+            try {
+                //load credentials from credentials.json
+                Creds = JsonConvert.DeserializeObject<Credentials>(File.ReadAllText("credentials.json"));
             } catch (Exception ex) {
                 Console.WriteLine($"Failed to load stuff from credentials.json, RTFM\n{ex.Message}");
                 Console.ReadKey();
                 return;
             }
 
-            //create new discord client
-            client = new DiscordClient();
+            //if password is not entered, prompt for password
+            if (string.IsNullOrWhiteSpace(Creds.Password)) {
+                Console.WriteLine("Password blank. Please enter your password:\n");
+                Creds.Password = Console.ReadLine();
+            }
 
+            Console.WriteLine(string.IsNullOrWhiteSpace(Creds.GoogleAPIKey)
+                ? "No google api key found. You will not be able to use music and links won't be shortened."
+                : "Google API key provided.");
+            Console.WriteLine(string.IsNullOrWhiteSpace(Creds.TrelloAppKey)
+                ? "No trello appkey found. You will not be able to use trello commands."
+                : "Trello app key provided.");
+            Console.WriteLine(Config.ForwardMessages != true
+                ? "Not forwarding messages."
+                : "Forwarding private messages to owner.");
+            Console.WriteLine(string.IsNullOrWhiteSpace(Creds.SoundCloudClientID)
+                ? "No soundcloud Client ID found. Soundcloud streaming is disabled."
+                : "SoundCloud streaming enabled.");
+
+            BotMention = $"<@{Creds.BotId}>";
+
+            //create new discord client and log
+            Client = new DiscordClient(new DiscordConfigBuilder() {
+                MessageCacheSize = 10,
+                ConnectionTimeout = 60000,
+                LogLevel = LogSeverity.Warning,
+                LogHandler = (s, e) =>
+                    Console.WriteLine($"Severity: {e.Severity}" +
+                                      $"Message: {e.Message}" +
+                                      $"ExceptionMessage: {e.Exception?.Message ?? "-"}"),
+            });
 
             //create a command service
-            var commandService = new CommandService(new CommandServiceConfig {
-                CommandChar = null,
-                HelpMode = HelpMode.Disable
+            var commandService = new CommandService(new CommandServiceConfigBuilder {
+                AllowMentionPrefix = false,
+                CustomPrefixHandler = m => 0,
+                HelpMode = HelpMode.Disabled,
+                ErrorHandler = async (s, e) => {
+                    if (e.ErrorType != CommandErrorType.BadPermissions)
+                        return;
+                    if (string.IsNullOrWhiteSpace(e.Exception?.Message))
+                        return;
+                    try {
+                        await e.Channel.SendMessage(e.Exception.Message);
+                    } catch { }
+                }
             });
-            
+
             //reply to personal messages and forward if enabled.
-            client.MessageReceived += Client_MessageReceived;
+            Client.MessageReceived += Client_MessageReceived;
 
             //add command service
-            var commands = client.Services.Add<CommandService>(commandService);
+            Client.AddService<CommandService>(commandService);
 
             //create module service
-            var modules = client.Services.Add<ModuleService>(new ModuleService());
+            var modules = Client.AddService<ModuleService>(new ModuleService());
 
             //add audio service
-            var audio = client.Services.Add<AudioService>(new AudioService(new AudioServiceConfig() {
+            Client.AddService<AudioService>(new AudioService(new AudioServiceConfigBuilder() {
                 Channels = 2,
                 EnableEncryption = false,
                 EnableMultiserver = true,
@@ -93,64 +114,95 @@ namespace NadekoBot {
 
             //install modules
             modules.Add(new Administration(), "Administration", ModuleFilter.None);
+            modules.Add(new Help(), "Help", ModuleFilter.None);
+            modules.Add(new PermissionModule(), "Permissions", ModuleFilter.None);
             modules.Add(new Conversations(), "Conversations", ModuleFilter.None);
             modules.Add(new Gambling(), "Gambling", ModuleFilter.None);
             modules.Add(new Games(), "Games", ModuleFilter.None);
             modules.Add(new Music(), "Music", ModuleFilter.None);
             modules.Add(new Searches(), "Searches", ModuleFilter.None);
-            if (loadTrello)
+            modules.Add(new NSFW(), "NSFW", ModuleFilter.None);
+            modules.Add(new ClashOfClans(), "ClashOfClans", ModuleFilter.None);
+            if (!string.IsNullOrWhiteSpace(Creds.TrelloAppKey))
                 modules.Add(new Trello(), "Trello", ModuleFilter.None);
 
             //run the bot
-            client.ExecuteAndWait(async () => {
-                await client.Connect(c.Username, c.Password);
+            Client.ExecuteAndWait(async () => {
+                try {
+                    await Client.Connect(Creds.Username, Creds.Password);
+                } catch (Exception ex) {
+                    Console.WriteLine($"Probably wrong EMAIL or PASSWORD.\n{ex.Message}");
+                    Console.ReadKey();
+                    Console.WriteLine(ex);
+                    Console.ReadKey();
+                    return;
+                }
                 Console.WriteLine("-----------------");
-                Console.WriteLine(NadekoStats.Instance.GetStats());
+                Console.WriteLine(await NadekoStats.Instance.GetStats());
                 Console.WriteLine("-----------------");
 
-                foreach (var serv in client.Servers) {
-                    if ((OwnerUser = serv.GetUser(OwnerID)) != null)
-                        return;
+                try {
+                    OwnerPrivateChannel = await Client.CreatePrivateChannel(Creds.OwnerIds[0]);
+                } catch {
+                    Console.WriteLine("Failed creating private channel with the first owner listed in credentials.json");
                 }
 
+                Classes.Permissions.PermissionsHandler.Initialize();
+
+                Client.ClientAPI.SendingRequest += (s, e) => {
+                    var request = e.Request as Discord.API.Client.Rest.SendMessageRequest;
+                    if (request == null) return;
+                    request.Content = request.Content?.Replace("@everyone", "@everyοne") ?? "_error_";
+                    if (string.IsNullOrWhiteSpace(request.Content))
+                        e.Cancel = true;
+                };
             });
             Console.WriteLine("Exiting...");
             Console.ReadKey();
-        }        
+        }
 
-        static bool repliedRecently = false;
+        public static bool IsOwner(ulong id) => Creds.OwnerIds.Contains(id);
+
+        public static bool IsOwner(User u) => IsOwner(u.Id);
+
+        public async Task SendMessageToOwner(string message) {
+            if (Config.ForwardMessages && OwnerPrivateChannel != null)
+                await OwnerPrivateChannel.SendMessage(message);
+        }
+
+        private static bool repliedRecently = false;
         private static async void Client_MessageReceived(object sender, MessageEventArgs e) {
-            if (e.Server != null || e.User.Id == client.CurrentUser.Id) return;
-
-            //just ban this trash AutoModerator
-            if (e.User.Id == 105309315895693312)
-                return; // FU
-
             try {
-                await (await client.GetInvite(e.Message.Text)).Accept();
-                await e.Send("I got in!");
-                return;
-            } catch (Exception) {
-                if (e.User.Id == 109338686889476096) { //carbonitex invite
-                    await e.Send("Failed to join the server.");
+                if (e.Server != null || e.User.Id == Client.CurrentUser.Id) return;
+                if (PollCommand.ActivePolls.SelectMany(kvp => kvp.Key.Users.Select(u => u.Id)).Contains(e.User.Id)) return;
+                if (ConfigHandler.IsBlackListed(e))
                     return;
+
+                if (!NadekoBot.Config.DontJoinServers) {
+                    try {
+                        await (await Client.GetInvite(e.Message.Text)).Accept();
+                        await e.Channel.SendMessage("I got in!");
+                        return;
+                    } catch {
+                        if (e.User.Id == 109338686889476096) { //carbonitex invite
+                            await e.Channel.SendMessage("Failed to join the server.");
+                            return;
+                        }
+                    }
                 }
-            }
 
-            if (ForwardMessages && OwnerUser != null)
-                await OwnerUser.SendMessage(e.User + ": ```\n" + e.Message.Text + "\n```");
+                if (Config.ForwardMessages && OwnerPrivateChannel != null)
+                    await OwnerPrivateChannel.SendMessage(e.User + ": ```\n" + e.Message.Text + "\n```");
 
-            if (repliedRecently = !repliedRecently) {
-                await e.Send("**COMMANDS DO NOT WORK IN PERSONAL MESSAGES**\nYou can type `-h` or `-help` or `@MyName help` in any of the channels I am in and I will send you a message with my commands.\n Or you can find out what i do here: https://github.com/Kwoth/NadekoBot\nYou can also just send me an invite link to a server and I will join it.\nIf you don't want me on your server, you can simply ban me ;(\nBot Creator's server: https://discord.gg/0ehQwTK2RBhxEi0X");
-                Timer t = new Timer();
-                t.Interval = 2000;
-                t.Start();
-                t.Elapsed += (s, ev) => {
-                    repliedRecently = !repliedRecently;
-                    t.Stop();
-                    t.Dispose();
-                };
-            }
+                if (repliedRecently) return;
+
+                repliedRecently = true;
+                await e.Channel.SendMessage(HelpCommand.HelpString);
+                await Task.Delay(2000);
+                repliedRecently = false;
+            } catch { }
         }
     }
 }
+
+//95520984584429568 meany

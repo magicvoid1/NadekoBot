@@ -1,103 +1,65 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Discord.Commands;
-using Parse;
 using NadekoBot.Extensions;
+using NadekoBot.Modules;
 
 namespace NadekoBot.Commands {
-    class RequestsCommand : DiscordCommand {
+    internal class RequestsCommand : DiscordCommand {
         public void SaveRequest(CommandEventArgs e, string text) {
-
-            var obj = new ParseObject("Requests");
-
-            obj["ServerId"] = e.Server.Id;
-            obj["ServerName"] = e.Server.Name;
-            obj["UserId"] = e.User.Id;
-            obj["UserName"] = e.User.Name;
-            obj["Request"] = text;
-
-            obj.SaveAsync();
+            Classes.DbHandler.Instance.InsertData(new Classes._DataModels.Request {
+                RequestText = text,
+                UserName = e.User.Name,
+                UserId = (long)e.User.Id,
+                ServerId = (long)e.Server.Id,
+                ServerName = e.Server.Name,
+                DateAdded = DateTime.Now
+            });
         }
         // todo what if it's too long?
         public string GetRequests() {
-            var task = ParseObject.GetQuery("Requests")
-                .FindAsync().Result;
+            var task = Classes.DbHandler.Instance.GetAllRows<Classes._DataModels.Request>();
 
-            string str = "Here are all current requests for NadekoBot:\n\n";
-            int i = 1;
+            var str = "Here are all current requests for NadekoBot:\n\n";
             foreach (var reqObj in task) {
-                str += (i++) + ". by **" + reqObj["UserName"] + "** from **" + reqObj["ServerName"] + "**  at " + reqObj.CreatedAt.Value.ToLocalTime() + "\n";
-                str += "**" + reqObj["Request"] + "**\n----------\n";
+                str += $"{reqObj.Id}. by **{reqObj.UserName}** from **{reqObj.ServerName}** at {reqObj.DateAdded.ToLocalTime()}\n" +
+                       $"**{reqObj.RequestText}**\n----------\n";
             }
             return str + "\n__Type [@NadekoBot clr] to clear all of my messages.__";
         }
 
-        public bool DeleteRequest(int requestNumber) {
-            var task = ParseObject.GetQuery("Requests")
-                .FindAsync().Result;
-            int i = 1;
-            foreach (var reqObj in task) {
-                if (i == requestNumber) {
-                    reqObj.DeleteAsync();
-                    return true;
-                }
-                i++;
-            }
-            return false;
-        }
+        public bool DeleteRequest(int requestNumber) => 
+            Classes.DbHandler.Instance.Delete<Classes._DataModels.Request>(requestNumber) != null;
 
-        public class ResolveRequestObject {
-            public ulong Id;
-            public ulong ServerId;
-            public string Text;
-        }
         /// <summary>
-        /// Resolves a request with a number and returns that users id.
+        /// Delete a request with a number and returns that request object.
         /// </summary>
         /// <returns>RequestObject of the request. Null if none</returns>
-        public ResolveRequestObject ResolveRequest(int requestNumber) {
-            var task = ParseObject.GetQuery("Requests")
-                .FindAsync().Result;
-            int i = 1;
-            foreach (var reqObj in task) {
-                if (i == requestNumber) {
-                    var txt = reqObj.Get<string>("Request");
-                    var id = reqObj.Get<ulong>("UserId");
-                    var sid = reqObj.Get<ulong>("ServerId");
-                    reqObj.DeleteAsync();
-                    return new ResolveRequestObject { Id = id, Text = txt, ServerId = sid };
-                }
-                i++;
-            }
-            return null;
-        }
+        public Classes._DataModels.Request ResolveRequest(int requestNumber) =>
+            Classes.DbHandler.Instance.Delete<Classes._DataModels.Request>(requestNumber);
 
-        public override Func<CommandEventArgs, Task> DoFunc() {
-            throw new NotImplementedException();
-        }
-
-        public override void Init(CommandGroupBuilder cgb) {
+        internal override void Init(CommandGroupBuilder cgb) {
 
             cgb.CreateCommand("req")
                 .Alias("request")
                 .Description("Requests a feature for nadeko.\n**Usage**: @NadekoBot req new_feature")
                 .Parameter("all", ParameterType.Unparsed)
                 .Do(async e => {
-                    string str = e.Args[0];
+                    var str = e.Args[0];
 
                     try {
                         SaveRequest(e, str);
-                    } catch (Exception) {
-                        await e.Send("Something went wrong.");
+                    } catch  {
+                        await e.Channel.SendMessage("Something went wrong.");
                         return;
                     }
-                    await e.Send("Thank you for your request.");
+                    await e.Channel.SendMessage("Thank you for your request.");
                 });
 
             cgb.CreateCommand("lr")
                 .Description("PMs the user all current nadeko requests.")
                 .Do(async e => {
-                    string str = GetRequests();
+                    var str = await Task.Run(() => GetRequests());
                     if (str.Trim().Length > 110)
                         await e.User.Send(str);
                     else
@@ -108,37 +70,39 @@ namespace NadekoBot.Commands {
                 .Description("Deletes a request. Only owner is able to do this.")
                 .Parameter("reqNumber", ParameterType.Required)
                 .Do(async e => {
-                    if (e.User.Id == NadekoBot.OwnerID) {
+                    if (NadekoBot.IsOwner(e.User.Id)) {
                         try {
                             if (DeleteRequest(int.Parse(e.Args[0]))) {
-                                await e.Send(e.User.Mention + " Request deleted.");
+                                await e.Channel.SendMessage(e.User.Mention + " Request deleted.");
                             } else {
-                                await e.Send("No request on that number.");
+                                await e.Channel.SendMessage("No request on that number.");
                             }
                         } catch {
-                            await e.Send("Error deleting request, probably NaN error.");
+                            await e.Channel.SendMessage("Error deleting request, probably NaN error.");
                         }
-                    } else await e.Send("You don't have permission to do that.");
+                    } else await e.Channel.SendMessage("You don't have permission to do that.");
                 });
 
             cgb.CreateCommand("rr")
                 .Description("Resolves a request. Only owner is able to do this.")
                 .Parameter("reqNumber", ParameterType.Required)
                 .Do(async e => {
-                    if (e.User.Id == NadekoBot.OwnerID) {
+                    if (NadekoBot.IsOwner(e.User.Id)) {
                         try {
                             var sc = ResolveRequest(int.Parse(e.Args[0]));
                             if (sc != null) {
-                                await e.Send(e.User.Mention + " Request resolved, notice sent.");
-                                await client.GetServer(sc.ServerId).GetUser(sc.Id).Send("**This request of yours has been resolved:**\n" + sc.Text);
+                                await e.Channel.SendMessage(e.User.Mention + " Request resolved, notice sent.");
+                                await NadekoBot.Client.GetServer((ulong)sc.ServerId).GetUser((ulong)sc.UserId).Send("**This request of yours has been resolved:**\n" + sc.RequestText);
                             } else {
-                                await e.Send("No request on that number.");
+                                await e.Channel.SendMessage("No request on that number.");
                             }
                         } catch {
-                            await e.Send("Error resolving request, probably NaN error.");
+                            await e.Channel.SendMessage("Error resolving request, probably NaN error.");
                         }
-                    } else await e.Send("You don't have permission to do that.");
+                    } else await e.Channel.SendMessage("You don't have permission to do that.");
                 });
         }
+
+        public RequestsCommand(DiscordModule module) : base(module) {}
     }
 }

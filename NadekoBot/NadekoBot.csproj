@@ -30,6 +30,8 @@
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -40,6 +42,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -49,18 +52,6 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ManifestCertificateThumbprint>0BE5B9F3B97B52FC5776E3D046AE0C7F708D2ED5</ManifestCertificateThumbprint>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ManifestKeyFile>NadekoBot_TemporaryKey.pfx</ManifestKeyFile>
-  </PropertyGroup>
-  <PropertyGroup>
-    <GenerateManifests>true</GenerateManifests>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignManifests>true</SignManifests>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'PRIVATE|AnyCPU'">
     <DebugSymbols>true</DebugSymbols>
@@ -75,10 +66,6 @@
   <ItemGroup>
     <Reference Include="libvideo, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\VideoLibrary.1.3.3\lib\portable-net45+win+wpa81+MonoAndroid10+xamarinios10+MonoTouch10\libvideo.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="libvideo.compat, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\VideoLibrary.Compat.1.3.3\lib\portable-net45+win+wpa81+MonoAndroid10+xamarinios10+MonoTouch10\libvideo.compat.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Manatee.Json, Version=1.0.0.0, Culture=neutral, PublicKeyToken=c267f67a39449c62, processorArchitecture=MSIL">
@@ -105,18 +92,6 @@
       <HintPath>..\packages\Newtonsoft.Json.8.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Parse, Version=1.6.2.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Parse.1.6.2\lib\net45\Parse.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Parse.NetFx45, Version=1.6.2.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Parse.1.6.2\lib\net45\Parse.NetFx45.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="policy.2.0.taglib-sharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=db62eba44689b5b0, processorArchitecture=MSIL">
-      <HintPath>..\packages\taglib.2.1.0.0\lib\policy.2.0.taglib-sharp.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="RestSharp, Version=105.2.3.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\RestSharp.105.2.3\lib\net452\RestSharp.dll</HintPath>
       <Private>True</Private>
@@ -135,39 +110,78 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
-    <Reference Include="taglib-sharp, Version=2.1.0.0, Culture=neutral, PublicKeyToken=db62eba44689b5b0, processorArchitecture=MSIL">
-      <HintPath>..\packages\taglib.2.1.0.0\lib\taglib-sharp.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Classes\ClashOfClans\ClashOfClans.cs" />
+    <Compile Include="Classes\DBHandler.cs" />
+    <Compile Include="Classes\FlowersHandler.cs" />
+    <Compile Include="Classes\IncidentsHandler.cs" />
+    <Compile Include="Classes\JSONModels\AnimeResult.cs" />
+    <Compile Include="Classes\JSONModels\Configuration.cs" />
+    <Compile Include="Classes\JSONModels\LocalizedStrings.cs" />
+    <Compile Include="Classes\JSONModels\MangaResult.cs" />
+    <Compile Include="Classes\JSONModels\_JSONModels.cs" />
     <Compile Include="Classes\Music\MusicControls.cs" />
+    <Compile Include="Classes\Music\Song.cs" />
     <Compile Include="Classes\Music\StreamRequest.cs" />
-    <Compile Include="Classes\SParser.cs" />
+    <Compile Include="Classes\Music\SoundCloud.cs" />
+    <Compile Include="Classes\Permissions\PermissionChecker.cs" />
+    <Compile Include="Classes\Permissions\PermissionHelper.cs" />
+    <Compile Include="Classes\Permissions\PermissionsHandler.cs" />
+    <Compile Include="Classes\Permissions\SimpleCheckers.cs" />
+    <Compile Include="Classes\SearchHelper.cs" />
+    <Compile Include="Classes\ServerSpecificConfig.cs" />
+    <Compile Include="Classes\_DataModels\AnnouncementModel.cs" />
+    <Compile Include="Classes\_DataModels\CommandModel.cs" />
+    <Compile Include="Classes\_DataModels\CurrencyStateModel.cs" />
+    <Compile Include="Classes\_DataModels\CurrencyTransactionModel.cs" />
+    <Compile Include="Classes\_DataModels\Donator.cs" />
+    <Compile Include="Classes\_DataModels\IDataModel.cs" />
+    <Compile Include="Classes\_DataModels\RequestModel.cs" />
+    <Compile Include="Classes\_DataModels\StatsModel.cs" />
+    <Compile Include="Classes\_DataModels\TypingArticleModel.cs" />
+    <Compile Include="Classes\_DataModels\UserQuoteModel.cs" />
+    <Compile Include="Commands\BetrayGame.cs" />
+    <Compile Include="Commands\CrossServerTextChannel.cs" />
+    <Compile Include="Modules\ClashOfClans.cs" />
+    <Compile Include="Commands\FilterWordsCommand.cs" />
+    <Compile Include="Commands\FilterInvitesCommand.cs" />
+    <Compile Include="Commands\LogCommand.cs" />
+    <Compile Include="Commands\LoLCommands.cs" />
+    <Compile Include="Commands\MessageRepeater.cs" />
+    <Compile Include="Commands\PlayingRotate.cs" />
+    <Compile Include="Commands\StreamNotifications.cs" />
+    <Compile Include="Commands\TriviaCommand.cs" />
+    <Compile Include="Classes\Trivia\TriviaGame.cs" />
+    <Compile Include="Classes\Trivia\TriviaQuestion.cs" />
+    <Compile Include="Classes\Trivia\TriviaQuestionPool.cs" />
     <Compile Include="Commands\RequestsCommand.cs" />
     <Compile Include="Commands\ServerGreetCommand.cs" />
     <Compile Include="Commands\SpeedTyping.cs" />
-    <Compile Include="Classes\_JSONModels.cs" />
     <Compile Include="Classes\Cards.cs" />
     <Compile Include="Classes\Extensions.cs" />
-    <Compile Include="Classes\Trivia.cs" />
     <Compile Include="Commands\CopyCommand.cs" />
     <Compile Include="Commands\DiceRollCommand.cs" />
-    <Compile Include="Commands\DiscordCommand.cs" />
+    <Compile Include="Commands\IDiscordCommand.cs" />
     <Compile Include="Commands\DrawCommand.cs" />
     <Compile Include="Commands\FlipCoinCommand.cs" />
     <Compile Include="Commands\HelpCommand.cs" />
+    <Compile Include="Commands\VoiceNotificationCommand.cs" />
+    <Compile Include="Commands\VoicePlusTextCommand.cs" />
     <Compile Include="Modules\Administration.cs" />
     <Compile Include="Modules\Conversations.cs" />
     <Compile Include="Modules\DiscordModule.cs" />
     <Compile Include="Modules\Gambling.cs" />
     <Compile Include="Modules\Games.cs" />
+    <Compile Include="Modules\Help.cs" />
     <Compile Include="Modules\Music.cs" />
+    <Compile Include="Commands\PollCommand.cs" />
+    <Compile Include="Modules\NSFW.cs" />
+    <Compile Include="Modules\Permissions.cs" />
+    <Compile Include="Commands\RatelimitCommand.cs" />
     <Compile Include="Modules\Searches.cs" />
     <Compile Include="Modules\Trello.cs" />
     <Compile Include="NadekoBot.cs" />
@@ -178,10 +192,11 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="Classes\NadekoStats.cs" />
+    <Compile Include="SQLite.cs" />
+    <Compile Include="SQLiteAsync.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="NadekoBot_TemporaryKey.pfx" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
@@ -197,24 +212,6 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="E:\Ostalo\Discord.Net\src\Discord.Net.Audio.Net45\Discord.Net.Audio.csproj">
-      <Project>{7bfef748-b934-4621-9b11-6302e3a9f6b3}</Project>
-      <Name>Discord.Net.Audio</Name>
-    </ProjectReference>
-    <ProjectReference Include="E:\Ostalo\Discord.Net\src\Discord.Net.Commands.Net45\Discord.Net.Commands.csproj">
-      <Project>{1b5603b4-6f8f-4289-b945-7baae523d740}</Project>
-      <Name>Discord.Net.Commands</Name>
-    </ProjectReference>
-    <ProjectReference Include="E:\Ostalo\Discord.Net\src\Discord.Net.Modules.Net45\Discord.Net.Modules.csproj">
-      <Project>{3091164f-66ae-4543-a63d-167c1116241d}</Project>
-      <Name>Discord.Net.Modules</Name>
-    </ProjectReference>
-    <ProjectReference Include="E:\Ostalo\Discord.Net\src\Discord.Net.Net45\Discord.Net.csproj">
-      <Project>{8d71a857-879a-4a10-859e-5ff824ed6688}</Project>
-      <Name>Discord.Net</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -223,9 +220,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\images\hidden.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\images\nadeko.jpg" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\images\rip.png" />
@@ -427,6 +421,24 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\images\cards\2_of_clubs.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\discord.net\src\Discord.Net.Audio.Net45\Discord.Net.Audio.csproj">
+      <Project>{7bfef748-b934-4621-9b11-6302e3a9f6b3}</Project>
+      <Name>Discord.Net.Audio</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\discord.net\src\Discord.Net.Commands.Net45\Discord.Net.Commands.csproj">
+      <Project>{1b5603b4-6f8f-4289-b945-7baae523d740}</Project>
+      <Name>Discord.Net.Commands</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\discord.net\src\Discord.Net.Modules.Net45\Discord.Net.Modules.csproj">
+      <Project>{3091164f-66ae-4543-a63d-167c1116241d}</Project>
+      <Name>Discord.Net.Modules</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\discord.net\src\Discord.Net.Net45\Discord.Net.csproj">
+      <Project>{8d71a857-879a-4a10-859e-5ff824ed6688}</Project>
+      <Name>Discord.Net</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -13,15 +13,16 @@ obj/
 **/Bin/Debug/**
 **/Bin/Release/
 **/Bin/PRIVATE/
-!**/Bin/Debug/Discord.Net.Audio.dll
-!**/Bin/Debug/Discord.Net.dll
-!**/Bin/Debug/Discord.Net.Commands.dll
-!**/Bin/Debug/Discord.Net.Modules.dll
 !**/Bin/Debug/opus.dll
 !**/Bin/Debug/libsodium.dll
-!**/Bin/Debug/Discord.Net.Commands.dll
+!**/Bin/Debug/Nito.AsyncEx.Enlightenment.dll
+!**/Bin/Debug/Nito.AsyncEx.dll
+!**/Bin/Debug/WebSocket4Net.dll
+!**/Bin/Debug/sqlite3.dll
 !**/Bin/Debug/data/*
 !**/Bin/Debug/data/
+!**/Bin/Debug/credentials_example.json
+Tests/
 
 # NuGet Packages
 *.nupkg
@@ -31,3 +32,5 @@ obj/
 !**/packages/build/
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/packages/repositories.config
+NadekoBot/bin/Debug/data/nadekobot.sqlite
+NadekoBot/bin/Debug/data/config.json

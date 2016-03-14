@@ -1,105 +1,182 @@
 ﻿using Discord;
 using Discord.Audio;
+using NadekoBot.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
-using Discord.Commands;
-
 namespace NadekoBot.Classes.Music {
-    public class MusicControls {
-        public bool NextSong = false;
-        public IAudioClient Voice;
-        public Channel VoiceChannel;
-        public bool Pause = false;
-        public List<StreamRequest> SongQueue = new List<StreamRequest>();
-        public StreamRequest CurrentSong;
 
-        public bool IsPaused { get; internal set; } = false;
-        public bool Stopped { get; private set; }
+    public enum MusicType {
+        Radio,
+        Normal,
+        Local
+    }
 
-        public IAudioClient VoiceClient;
+    public enum StreamState {
+        Resolving,
+        Queued,
+        Buffering, //not using it atm
+        Playing,
+        Completed
+    }
 
-        private readonly object _voiceLock = new object();
+    public class MusicPlayer {
+        public static int MaximumPlaylistSize => 50;
 
-        public MusicControls() {
+        private IAudioClient audioClient { get; set; }
+
+        private readonly List<Song> playlist = new List<Song>();
+        public IReadOnlyCollection<Song> Playlist => playlist;
+        private readonly object playlistLock = new object();
+
+        public Song CurrentSong { get; set; } = default(Song);
+        private CancellationTokenSource SongCancelSource { get; set; }
+        private CancellationToken cancelToken { get; set; }
+
+        public bool Paused { get; set; }
+
+        public float Volume { get; private set; }
+
+        public event EventHandler<Song> OnCompleted = delegate { };
+        public event EventHandler<Song> OnStarted = delegate { };
+
+        public Channel PlaybackVoiceChannel { get; private set; }
+
+        private bool Destroyed { get; set; } = false;
+
+        public MusicPlayer(Channel startingVoiceChannel, float? defaultVolume) {
+            if (startingVoiceChannel == null)
+                throw new ArgumentNullException(nameof(startingVoiceChannel));
+            if (startingVoiceChannel.Type != ChannelType.Voice)
+                throw new ArgumentException("Channel must be of type voice");
+            Volume = defaultVolume ?? 1.0f;
+
+            PlaybackVoiceChannel = startingVoiceChannel;
+            SongCancelSource = new CancellationTokenSource();
+            cancelToken = SongCancelSource.Token;
+
             Task.Run(async () => {
-                while (!Stopped) {
+                while (!Destroyed) {
                     try {
-                        lock (_voiceLock) {
-                            if (CurrentSong == null) {
-                                if (SongQueue.Count > 0)
-                                    LoadNextSong();
-
-                            } else if (CurrentSong.State == StreamState.Completed || NextSong) {
-                                NextSong = false;
-                                LoadNextSong();
-                            }
-                        }
-                    } catch (Exception e) {
-                        Console.WriteLine("Bug in music task run. " + e);
+                        if(audioClient?.State != ConnectionState.Connected)
+                            audioClient = await PlaybackVoiceChannel.JoinAudio();
+                    } catch {
+                        await Task.Delay(1000);
+                        continue;
                     }
-                    await Task.Delay(500);
+                    CurrentSong = GetNextSong();
+                    var curSong = CurrentSong;
+                    if (curSong != null) {
+                        try {
+                            OnStarted(this, curSong);
+                            await curSong.Play(audioClient, cancelToken);
+                        } catch (OperationCanceledException) {
+                            Console.WriteLine("Song canceled");
+                        } catch (Exception ex) {
+                            Console.WriteLine($"Exception in PlaySong: {ex}");
+                        }
+                        OnCompleted(this, curSong);
+                        SongCancelSource = new CancellationTokenSource();
+                        cancelToken = SongCancelSource.Token;
+                    }
+                    await Task.Delay(1000);
                 }
             });
         }
 
-        public MusicControls(Channel voiceChannel) : this() {
-            VoiceChannel = voiceChannel;
-        }
-
-        public void LoadNextSong() {
-            lock (_voiceLock) {
-                CurrentSong?.Stop();
-                CurrentSong = null;
-                if (SongQueue.Count != 0) {
-                    CurrentSong = SongQueue[0];
-                    SongQueue.RemoveAt(0);
-                } else {
-                    VoiceClient?.Disconnect();
-                    VoiceClient = null;
-                    return;
+        public void Next() {
+            lock (playlistLock) {
+                if (!SongCancelSource.IsCancellationRequested) {
+                    Paused = false;
+                    SongCancelSource.Cancel();
                 }
             }
-
-            try {
-                CurrentSong?.Start();
-            } catch (Exception ex) {
-                Console.WriteLine($"Starting failed: {ex}");
-                CurrentSong?.Stop();
-            }
         }
 
-        internal void Stop() {
-            lock (_voiceLock) {
-                Stopped = true;
-                foreach (var kvp in SongQueue) {
-                    if(kvp != null)
-                        kvp.Cancel();
-                }
-                SongQueue.Clear();
-                CurrentSong?.Stop();
+        public void Stop() {
+            lock (playlistLock) {
+                playlist.Clear();
                 CurrentSong = null;
-                VoiceClient?.Disconnect();
-                VoiceClient = null;
+                if (!SongCancelSource.IsCancellationRequested)
+                    SongCancelSource.Cancel();
             }
         }
 
-        internal async Task<StreamRequest> CreateStreamRequest(CommandEventArgs e, string query, Channel voiceChannel) {
-            if (VoiceChannel == null)
-                throw new ArgumentNullException("Please join a voicechannel.");
-            StreamRequest sr = null;
-            if (VoiceClient == null) {
-                VoiceChannel = voiceChannel;
-                VoiceClient = await NadekoBot.client.Audio().Join(VoiceChannel);
-            }
-            sr = new StreamRequest(e, query, this);
+        public void TogglePause() => Paused = !Paused;
 
-            lock (_voiceLock) {
-                SongQueue.Add(sr);
+        public void Shuffle() {
+            lock (playlistLock) {
+                playlist.Shuffle();
             }
-            return sr;
         }
 
-        internal bool TogglePause() => IsPaused = !IsPaused;
+        public int SetVolume(int volume) {
+            if (volume < 0)
+                volume = 0;
+            if (volume > 150)
+                volume = 150;
+
+            Volume = volume / 100.0f;
+            return volume;
+        }
+
+        private Song GetNextSong() {
+            lock (playlistLock) {
+                if (playlist.Count == 0)
+                    return null;
+                var toReturn = playlist[0];
+                playlist.RemoveAt(0);
+                return toReturn;
+            }
+        }
+
+        public void AddSong(Song s) {
+            if (s == null)
+                throw new ArgumentNullException(nameof(s));
+            lock (playlistLock) {
+                playlist.Add(s);
+            }
+        }
+
+        public void RemoveSong(Song s) {
+            if (s == null)
+                throw new ArgumentNullException(nameof(s));
+            lock (playlistLock) {
+                playlist.Remove(s);
+            }
+        }
+
+        public void RemoveSongAt(int index) {
+            lock (playlistLock) {
+                if (index < 0 || index >= playlist.Count)
+                    throw new ArgumentException("Invalid index");
+                playlist.RemoveAt(index);
+            }
+        }
+
+        internal Task MoveToVoiceChannel(Channel voiceChannel) {
+            if (audioClient?.State != ConnectionState.Connected)
+                throw new InvalidOperationException("Can't move while bot is not connected to voice channel.");
+            PlaybackVoiceChannel = voiceChannel;
+            return PlaybackVoiceChannel.JoinAudio();
+        }
+
+        internal void ClearQueue() {
+            lock (playlistLock) {
+                playlist.Clear();
+            }
+        }
+
+        public void Destroy() {
+            lock (playlistLock) {
+                playlist.Clear();
+                Destroyed = true;
+                CurrentSong = null;
+                if (!SongCancelSource.IsCancellationRequested)
+                    SongCancelSource.Cancel();
+                audioClient.Disconnect();
+            }
+        }
     }
 }

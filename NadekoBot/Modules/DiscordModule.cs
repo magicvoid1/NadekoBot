@@ -1,19 +1,12 @@
 ﻿using Discord.Modules;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using NadekoBot.Commands;
 
-namespace NadekoBot.Modules
-{
-    abstract class DiscordModule : IModule
-    {
-        public List<DiscordCommand> commands;
+namespace NadekoBot.Modules {
+    internal abstract class DiscordModule : IModule {
+        protected readonly HashSet<DiscordCommand> commands = new HashSet<DiscordCommand>();
 
-        protected DiscordModule() {
-            commands = new List<DiscordCommand>();
-        }
+        public abstract string Prefix { get; }
 
         public abstract void Install(ModuleManager manager);
     }

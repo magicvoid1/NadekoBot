@@ -1,295 +1,240 @@
 ﻿using System;
-using System.Threading.Tasks;
 using Discord.Modules;
 using System.Net;
 using System.IO;
 using Newtonsoft.Json.Linq;
-using System.Text.RegularExpressions;
-using Newtonsoft.Json;
 using Discord.Commands;
 using NadekoBot.Extensions;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using NadekoBot.Classes;
+using NadekoBot.Commands;
 
-namespace NadekoBot.Modules
-{
-    class Searches : DiscordModule
-    {
-        public Searches() : base()
-        {
-
+namespace NadekoBot.Modules {
+    internal class Searches : DiscordModule {
+        private readonly Random rng;
+        public Searches() {
+            commands.Add(new LoLCommands(this));
+            commands.Add(new StreamNotifications(this));
+            rng = new Random();
         }
 
-        public override void Install(ModuleManager manager)
-        {
-            var client = NadekoBot.client;
+        public override string Prefix { get; } = NadekoBot.Config.CommandPrefixes.Searches;
 
-            manager.CreateCommands("",cgb =>
-            {
-                cgb.CreateCommand("~yt")
-                    .Parameter("query",Discord.Commands.ParameterType.Unparsed)
-                    .Description("Queries youtubes and embeds the first result")
-                    .Do(async e =>
-                    {
-                        if (!(await ValidateQuery(e.Channel, e.GetArg("query")))) return;
+        public override void Install(ModuleManager manager) {
+            manager.CreateCommands("", cgb => {
 
-                        var str = ShortenUrl(FindYoutubeUrlByKeywords(e.GetArg("query")));
-                        if (string.IsNullOrEmpty(str.Trim()))
-                        {
-                            await e.Send( "Query failed");
-                            return;
-                        }
-                        await e.Send( str);
+                cgb.AddCheck(Classes.Permissions.PermissionChecker.Instance);
+
+                commands.ForEach(cmd => cmd.Init(cgb));
+
+                cgb.CreateCommand(Prefix + "yt")
+                    .Parameter("query", ParameterType.Unparsed)
+                    .Description("Searches youtubes and shows the first result")
+                    .Do(async e => {
+                        if (!(await SearchHelper.ValidateQuery(e.Channel, e.GetArg("query")))) return;
+
+                        var shortUrl = await SearchHelper.ShortenUrl(await SearchHelper.FindYoutubeUrlByKeywords(e.GetArg("query")));
+                        await e.Channel.SendMessage(shortUrl);
                     });
 
-                cgb.CreateCommand("~ani")
-                    .Alias("~anime").Alias("~aq")
-                    .Parameter("query", Discord.Commands.ParameterType.Unparsed)
+                cgb.CreateCommand(Prefix + "ani")
+                    .Alias(Prefix + "anime", Prefix + "aq")
+                    .Parameter("query", ParameterType.Unparsed)
                     .Description("Queries anilist for an anime and shows the first result.")
-                    .Do(async e =>
-                    {
-                        if (!(await ValidateQuery(e.Channel, e.GetArg("query")))) return;
-
-                        var result = GetAnimeQueryResultLink(e.GetArg("query"));
-                        if (result == null) { 
-                            await e.Send( "Failed to find that anime.");
+                    .Do(async e => {
+                        if (!(await SearchHelper.ValidateQuery(e.Channel, e.GetArg("query")))) return;
+                        string result;
+                        try {
+                            result = (await SearchHelper.GetAnimeData(e.GetArg("query"))).ToString();
+                        } catch {
+                            await e.Channel.SendMessage("Failed to find that anime.");
                             return;
                         }
 
-                        await e.Send(result.ToString());
+                        await e.Channel.SendMessage(result.ToString());
                     });
 
-                cgb.CreateCommand("~mang")
-                    .Alias("~manga").Alias("~mq")
-                    .Parameter("query", Discord.Commands.ParameterType.Unparsed)
+                cgb.CreateCommand(Prefix + "mang")
+                    .Alias(Prefix + "manga").Alias(Prefix + "mq")
+                    .Parameter("query", ParameterType.Unparsed)
                     .Description("Queries anilist for a manga and shows the first result.")
-                    .Do(async e =>
-                    {
-                        if (!(await ValidateQuery(e.Channel, e.GetArg("query")))) return;
-
-                        var result = GetMangaQueryResultLink(e.GetArg("query"));
-                        if (result == null)
-                        {
-                            await e.Send( "Failed to find that anime.");
+                    .Do(async e => {
+                        if (!(await SearchHelper.ValidateQuery(e.Channel, e.GetArg("query")))) return;
+                        string result;
+                        try {
+                            result = (await SearchHelper.GetMangaData(e.GetArg("query"))).ToString();
+                        } catch {
+                            await e.Channel.SendMessage("Failed to find that anime.");
                             return;
                         }
-                        await e.Send( result.ToString());
+                        await e.Channel.SendMessage(result);
                     });
 
-                cgb.CreateCommand("~randomcat")
+                cgb.CreateCommand(Prefix + "randomcat")
                     .Description("Shows a random cat image.")
                     .Do(async e => {
-                        try {
-                            await e.Send(JObject.Parse(new StreamReader(
-                                WebRequest.Create("http://www.random.cat/meow")
-                                    .GetResponse()
-                                    .GetResponseStream())
-                                .ReadToEnd())["file"].ToString());
-                        } catch (Exception) { }
+                        await e.Channel.SendMessage(JObject.Parse(
+                            await SearchHelper.GetResponseStringAsync("http://www.random.cat/meow"))["file"].ToString());
                     });
 
-                cgb.CreateCommand("~i")
-                   .Description("Pulls a first image using a search parameter.\n**Usage**: @NadekoBot img Multiword_search_parameter")
-                   .Alias("img")
-                   .Parameter("all", ParameterType.Unparsed)
+                cgb.CreateCommand(Prefix + "i")
+                   .Description("Pulls the first image found using a search parameter. Use ~ir for different results.\n**Usage**: ~i cute kitten")
+                   .Parameter("query", ParameterType.Unparsed)
                        .Do(async e => {
-                           await e.Send("This feature is being reconstructed.");
-                           
+                           if (string.IsNullOrWhiteSpace(e.GetArg("query")))
+                               return;
+                           try {
+                               var reqString = $"https://www.googleapis.com/customsearch/v1?q={Uri.EscapeDataString(e.GetArg("query"))}&cx=018084019232060951019%3Ahs5piey28-e&num=1&searchType=image&fields=items%2Flink&key={NadekoBot.Creds.GoogleAPIKey}";
+                               var obj = JObject.Parse(await SearchHelper.GetResponseStringAsync(reqString));
+                               await e.Channel.SendMessage(obj["items"][0]["link"].ToString());
+                           } catch (Exception ex) {
+                               await e.Channel.SendMessage($"💢 {ex.Message}");
+                           }
                        });
 
-                cgb.CreateCommand("~ir")
-                    .Description("Pulls a random image using a search parameter.\n**Usage**: @NadekoBot img Multiword_search_parameter")
-                    .Alias("imgrandom")
-                    .Parameter("all", ParameterType.Unparsed)
-                    .Do(async e => {
-                        await e.Send("This feature is being reconstructed.");
-
-                    });
-
-                cgb.CreateCommand("~hentai")
-                    .Description("Shows a random NSFW hentai image from gelbooru and danbooru with a given tag. Tag is optional but preffered.\n**Usage**: ~hentai yuri")
-                    .Parameter("tag", ParameterType.Unparsed)
-                    .Do(async e => {
-                        string tag = e.GetArg("tag");
-                        if (tag == null)
-                            tag = "";
-                        await e.Send(":heart: Gelbooru: " + GetGelbooruImageLink(tag));
-                        await e.Send(":heart: Danbooru: " + GetDanbooruImageLink(tag));
-                    });
-                cgb.CreateCommand("~danbooru")
-                    .Description("Shows a random hentai image from danbooru with a given tag. Tag is optional but preffered.\n**Usage**: ~hentai yuri")
-                    .Parameter("tag", ParameterType.Unparsed)
-                    .Do(async e => {
-                        string tag = e.GetArg("tag");
-                        if (tag == null)
-                            tag = "";
-                        await e.Send(GetDanbooruImageLink(tag));
-                    });
-                cgb.CreateCommand("~gelbooru")
-                    .Description("Shows a random hentai image from gelbooru with a given tag. Tag is optional but preffered.\n**Usage**: ~hentai yuri")
-                    .Parameter("tag", ParameterType.Unparsed)
-                    .Do(async e => {
-                        string tag = e.GetArg("tag");
-                        if (tag == null)
-                            tag = "";
-                        await e.Send(GetGelbooruImageLink(tag));
-                    });
-                cgb.CreateCommand("lmgtfy")
+                cgb.CreateCommand(Prefix + "ir")
+                   .Description("Pulls a random image using a search parameter.\n**Usage**: ~ir cute kitten")
+                   .Parameter("query", ParameterType.Unparsed)
+                       .Do(async e => {
+                           if (string.IsNullOrWhiteSpace(e.GetArg("query")))
+                               return;
+                           try {
+                               var reqString = $"https://www.googleapis.com/customsearch/v1?q={Uri.EscapeDataString(e.GetArg("query"))}&cx=018084019232060951019%3Ahs5piey28-e&num=1&searchType=image&start={ rng.Next(1, 150) }&fields=items%2Flink&key={NadekoBot.Creds.GoogleAPIKey}";
+                               var obj = JObject.Parse(await SearchHelper.GetResponseStringAsync(reqString));
+                               await e.Channel.SendMessage(obj["items"][0]["link"].ToString());
+                           } catch (Exception ex) {
+                               await e.Channel.SendMessage($"💢 {ex.Message}");
+                           }
+                       });
+                cgb.CreateCommand(Prefix + "lmgtfy")
                     .Description("Google something for an idiot.")
                     .Parameter("ffs", ParameterType.Unparsed)
                     .Do(async e => {
                         if (e.GetArg("ffs") == null || e.GetArg("ffs").Length < 1) return;
-                        await e.Send($"http://lmgtfy.com/?q={ Uri.EscapeUriString(e.GetArg("ffs").ToString()) }".ShortenUrl());
+                        await e.Channel.SendMessage(await $"http://lmgtfy.com/?q={ Uri.EscapeUriString(e.GetArg("ffs").ToString()) }".ShortenUrl());
                     });
+
+                cgb.CreateCommand(Prefix + "hs")
+                  .Description("Searches for a Hearthstone card and shows its image. Takes a while to complete.\n**Usage**:~hs Ysera")
+                  .Parameter("name", ParameterType.Unparsed)
+                  .Do(async e => {
+                      var arg = e.GetArg("name");
+                      if (string.IsNullOrWhiteSpace(arg)) {
+                          await e.Channel.SendMessage("💢 Please enter a card name to search for.");
+                          return;
+                      }
+                      await e.Channel.SendIsTyping();
+                      var headers = new Dictionary<string, string> { { "X-Mashape-Key", NadekoBot.Creds.MashapeKey } };
+                      var res = await SearchHelper.GetResponseStringAsync($"https://omgvamp-hearthstone-v1.p.mashape.com/cards/search/{Uri.EscapeUriString(arg)}", headers);
+                      try {
+                          var items = JArray.Parse(res);
+                          var images = new List<Image>();
+                          if (items == null)
+                              throw new KeyNotFoundException("Cannot find a card by that name");
+                          var cnt = 0;
+                          items.Shuffle();
+                          foreach (var item in items.TakeWhile(item => cnt++ < 4).Where(item => item.HasValues && item["img"] != null)) {
+                              images.Add(
+                                  Image.FromStream(await SearchHelper.GetResponseStreamAsync(item["img"].ToString())));
+                          }
+                          if (items.Count > 4) {
+                              await e.Channel.SendMessage("⚠ Found over 4 images. Showing random 4.");
+                          }
+                          await e.Channel.SendFile(arg + ".png", (await images.MergeAsync()).ToStream(System.Drawing.Imaging.ImageFormat.Png));
+                      } catch (Exception ex) {
+                          await e.Channel.SendMessage($"💢 Error {ex.Message}");
+                      }
+                  });
+
+                cgb.CreateCommand(Prefix + "osu")
+                  .Description("Shows osu stats for a player.\n**Usage**:~osu Name")
+                  .Parameter("usr", ParameterType.Unparsed)
+                  .Do(async e => {
+                      if (string.IsNullOrWhiteSpace(e.GetArg("usr")))
+                          return;
+
+                      using (WebClient cl = new WebClient()) {
+                          try {
+                              cl.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
+                              cl.Headers.Add(HttpRequestHeader.UserAgent, "Mozilla/5.0 (Windows NT 6.2; Win64; x64)");
+                              cl.DownloadDataAsync(new Uri($"http://lemmmy.pw/osusig/sig.php?uname={ e.GetArg("usr") }&flagshadow&xpbar&xpbarhex&pp=2"));
+                              cl.DownloadDataCompleted += async (s, cle) => {
+                                  try {
+                                      await e.Channel.SendFile($"{e.GetArg("usr")}.png", new MemoryStream(cle.Result));
+                                      await e.Channel.SendMessage($"`Profile Link:`https://osu.ppy.sh/u/{Uri.EscapeDataString(e.GetArg("usr"))}\n`Image provided by https://lemmmy.pw/osusig`");
+                                  } catch { }
+                              };
+                          } catch {
+                              await e.Channel.SendMessage("💢 Failed retrieving osu signature :\\");
+                          }
+                      }
+                  });
+
+                cgb.CreateCommand(Prefix + "ud")
+                  .Description("Searches Urban Dictionary for a word.\n**Usage**:~ud Pineapple")
+                  .Parameter("query", ParameterType.Unparsed)
+                  .Do(async e => {
+                      var arg = e.GetArg("query");
+                      if (string.IsNullOrWhiteSpace(arg)) {
+                          await e.Channel.SendMessage("💢 Please enter a search term.");
+                          return;
+                      }
+                      await e.Channel.SendIsTyping();
+                      var headers = new Dictionary<string, string> { { "X-Mashape-Key", NadekoBot.Creds.MashapeKey } };
+                      var res = await SearchHelper.GetResponseStringAsync($"https://mashape-community-urban-dictionary.p.mashape.com/define?term={Uri.EscapeUriString(arg)}", headers);
+                      try {
+                          var items = JObject.Parse(res);
+                          var sb = new System.Text.StringBuilder();
+                          sb.AppendLine($"`Term:` {items["list"][0]["word"].ToString()}");
+                          sb.AppendLine($"`Definition:` {items["list"][0]["definition"].ToString()}");
+                          sb.Append($"`Link:` <{await items["list"][0]["permalink"].ToString().ShortenUrl()}>");
+                          await e.Channel.SendMessage(sb.ToString());
+                      } catch {
+                          await e.Channel.SendMessage("💢 Failed finding a definition for that term.");
+                      }
+                  });
+                // thanks to Blaubeerwald
+                cgb.CreateCommand(Prefix + "#")
+                 .Description("Searches Tagdef.com for a hashtag.\n**Usage**:~# ff")
+                  .Parameter("query", ParameterType.Unparsed)
+                  .Do(async e => {
+                      var arg = e.GetArg("query");
+                      if (string.IsNullOrWhiteSpace(arg)) {
+                          await e.Channel.SendMessage("💢 Please enter a search term.");
+                          return;
+                      }
+                      await e.Channel.SendIsTyping();
+                      var headers = new Dictionary<string, string> { { "X-Mashape-Key", NadekoBot.Creds.MashapeKey } };
+                      var res = await SearchHelper.GetResponseStringAsync($"https://tagdef.p.mashape.com/one.{Uri.EscapeUriString(arg)}.json", headers);
+                      try {
+                          var items = JObject.Parse(res);
+                          var sb = new System.Text.StringBuilder();
+                          sb.AppendLine($"`Hashtag:` {items["defs"]["def"]["hashtag"].ToString()}");
+                          sb.AppendLine($"`Definition:` {items["defs"]["def"]["text"].ToString()}");
+                          sb.Append($"`Link:` <{await items["defs"]["def"]["uri"].ToString().ShortenUrl()}>");
+                          await e.Channel.SendMessage(sb.ToString());
+                      } catch {
+                          await e.Channel.SendMessage("💢 Failed finidng a definition for that tag.");
+                      }
+                  });
+                //todo when moved from parse
+                /*
+                cgb.CreateCommand(Prefix + "osubind")
+                    .Description("Bind discord user to osu name\n**Usage**: ~osubind My osu name")
+                    .Parameter("osu_name", ParameterType.Unparsed)
+                    .Do(async e => {
+                        var userName = e.GetArg("user_name");
+                        var osuName = e.GetArg("osu_name");
+                        var usr = e.Server.FindUsers(userName).FirstOrDefault();
+                        if (usr == null) {
+                            await e.Channel.SendMessage("Cannot find that discord user.");
+                            return;
+                        }
+                    });
+                */
             });
-        }
-
-        public static string MakeRequestAndGetResponse(string v) =>
-            new StreamReader(((HttpWebRequest)WebRequest.Create(v)).GetResponse().GetResponseStream()).ReadToEnd();
-
-        private string token = "";
-        private AnimeResult GetAnimeQueryResultLink(string query)
-        {
-            try
-            {
-                var cl = new RestSharp.RestClient("http://anilist.co/api");
-                var rq = new RestSharp.RestRequest("/auth/access_token", RestSharp.Method.POST);
-
-                RefreshToken();
-
-                rq = new RestSharp.RestRequest("/anime/search/" + Uri.EscapeUriString(query));
-                rq.AddParameter("access_token", token);
-
-                var smallObj = JArray.Parse(cl.Execute(rq).Content)[0];
-
-                rq = new RestSharp.RestRequest("anime/" + smallObj["id"]);
-                rq.AddParameter("access_token", token);
-                return JsonConvert.DeserializeObject<AnimeResult>(cl.Execute(rq).Content);
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
-
-        private MangaResult GetMangaQueryResultLink(string query)
-        {
-            try
-            {
-                RefreshToken();
-
-                var cl = new RestSharp.RestClient("http://anilist.co/api");
-                var rq = new RestSharp.RestRequest("/auth/access_token", RestSharp.Method.POST);
-                rq = new RestSharp.RestRequest("/manga/search/"+Uri.EscapeUriString(query));
-                rq.AddParameter("access_token", token);
-                
-                var smallObj = JArray.Parse(cl.Execute(rq).Content)[0];
-
-                rq = new RestSharp.RestRequest("manga/" + smallObj["id"]);
-                rq.AddParameter("access_token", token);
-                return JsonConvert.DeserializeObject<MangaResult> (cl.Execute(rq).Content);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-                return null;
-            }
-        }
-
-        private void RefreshToken()
-        {
-            var cl = new RestSharp.RestClient("http://anilist.co/api");
-            var rq = new RestSharp.RestRequest("/auth/access_token", RestSharp.Method.POST);
-            rq.AddParameter("grant_type", "client_credentials");
-            rq.AddParameter("client_id", "kwoth-w0ki9");
-            rq.AddParameter("client_secret", "Qd6j4FIAi1ZK6Pc7N7V4Z");
-            var exec = cl.Execute(rq);
-            /*
-            Console.WriteLine($"Server gave me content: { exec.Content }\n{ exec.ResponseStatus } -> {exec.ErrorMessage} ");
-            Console.WriteLine($"Err exception: {exec.ErrorException}");
-            Console.WriteLine($"Inner: {exec.ErrorException.InnerException}");
-            */
-
-            token = JObject.Parse(exec.Content)["access_token"].ToString();
-        }
-
-        private static async Task<bool> ValidateQuery(Discord.Channel ch,string query) {
-            if (string.IsNullOrEmpty(query.Trim()))
-            {
-                await ch.Send("Please specify search parameters.");
-                return false;
-            }
-            return true;
-        }
-
-        public static string FindYoutubeUrlByKeywords(string v) {
-            if (NadekoBot.GoogleAPIKey == "" || NadekoBot.GoogleAPIKey == null) {
-                Console.WriteLine("ERROR: No google api key found. Playing `Never gonna give you up`.");
-                return @"https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-            }
-            WebRequest wr = WebRequest.Create("https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=" + Uri.EscapeDataString(v) + "&key=" + NadekoBot.GoogleAPIKey);
-
-            var sr = new StreamReader(wr.GetResponse().GetResponseStream());
-
-            dynamic obj = JObject.Parse(sr.ReadToEnd());
-            string toReturn = "http://www.youtube.com/watch?v=" + obj.items[0].id.videoId.ToString();
-            return toReturn;
-        }
-
-        public string GetDanbooruImageLink(string tag) {
-            try {
-                var rng = new Random();
-
-                if (tag == "loli") //loli doesn't work for some reason atm
-                    tag = "flat_chest";
-
-                var webpage = MakeRequestAndGetResponse($"http://danbooru.donmai.us/posts?page={ rng.Next(0, 30) }&tags={ tag.Replace(" ","_") }");
-                var matches = Regex.Matches(webpage, "data-large-file-url=\"(?<id>.*?)\"");
-
-                return $"http://danbooru.donmai.us{ matches[rng.Next(0, matches.Count)].Groups["id"].Value }".ShortenUrl();
-            } catch (Exception) {
-                return null;
-            }
-        }
-
-        public string GetGelbooruImageLink(string tag) {
-            try {
-                var rng = new Random();
-                var url = $"http://gelbooru.com/index.php?page=post&s=list&pid={ rng.Next(0, 15) * 42 }&tags={ tag.Replace(" ", "_") }";
-                var webpage = MakeRequestAndGetResponse(url); // first extract the post id and go to that posts page
-                var matches = Regex.Matches(webpage, "span id=\"s(?<id>\\d*)\"");
-                var postLink = $"http://gelbooru.com/index.php?page=post&s=view&id={ matches[rng.Next(0, matches.Count)].Groups["id"].Value }";
-                webpage = MakeRequestAndGetResponse(postLink);
-                //now extract the image from post page
-                var match = Regex.Match(webpage, "\"(?<url>http://simg4.gelbooru.com//images.*?)\"");
-                return match.Groups["url"].Value;
-            } catch (Exception) {
-                return null;
-            }
-        }
-
-        public static string ShortenUrl(string url)
-        {
-            if (NadekoBot.GoogleAPIKey == null || NadekoBot.GoogleAPIKey == "") return url;
-
-            var httpWebRequest = (HttpWebRequest)WebRequest.Create("https://www.googleapis.com/urlshortener/v1/url?key=" + NadekoBot.GoogleAPIKey);
-            httpWebRequest.ContentType = "application/json";
-            httpWebRequest.Method = "POST";
-
-            using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
-            {
-                string json = "{\"longUrl\":\"" + url + "\"}";
-                streamWriter.Write(json);
-            }
-            try
-            {
-                var httpResponse = (HttpWebResponse)httpWebRequest.GetResponse();
-                using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
-                {
-                    var responseText = streamReader.ReadToEnd();
-                    string MATCH_PATTERN = @"""id"": ?""(?<id>.+)""";
-                    return Regex.Match(responseText, MATCH_PATTERN).Groups["id"].Value;
-                }
-            }
-            catch (Exception ex) { Console.WriteLine(ex.ToString()); return ""; }
         }
     }
 }
