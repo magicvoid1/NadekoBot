@@ -9,18 +9,50 @@ namespace NadekoBot.Classes.JSONModels {
         public bool DontJoinServers { get; set; } = false;
         public bool ForwardMessages { get; set; } = true;
         public bool IsRotatingStatus { get; set; } = false;
-        public HashSet<StreamNotificationConfig> ObservingStreams { get; set; } = new HashSet<StreamNotificationConfig>();
+
+        [JsonIgnore]
+        public List<Quote> Quotes { get; set; } = new List<Quote>();
+
+        public HashSet<StreamNotificationConfig> ObservingStreams { get; set; } =
+            new HashSet<StreamNotificationConfig>();
+
         public List<string> RotatingStatuses { get; set; } = new List<string>();
         public CommandPrefixesModel CommandPrefixes { get; set; } = new CommandPrefixesModel();
         public HashSet<ulong> ServerBlacklist { get; set; } = new HashSet<ulong>();
         public HashSet<ulong> ChannelBlacklist { get; set; } = new HashSet<ulong>();
+
         public HashSet<ulong> UserBlacklist { get; set; } = new HashSet<ulong>() {
             105309315895693312,
             119174277298782216,
             143515953525817344
         };
 
-        public string[] DisguiseResponses { get; } = {
+        public string[] _8BallResponses { get; set; } =
+            {
+                "Most definitely yes",
+                "For sure",
+                "As I see it, yes",
+                "My sources say yes",
+                "Yes",
+                "Most likely",
+                "Perhaps",
+                "Maybe",
+                "Not sure",
+                "It is uncertain",
+                "Ask me again later",
+                "Don't count on it",
+                "Probably not",
+                "Very doubtful",
+                "Most likely no",
+                "Nope",
+                "No",
+                "My sources say no",
+                "Dont even think about it",
+                "Definitely no",
+                "NO - It may cause disease contraction"
+            };
+
+    public string[] DisguiseResponses { get; } = {
             "https://cdn.discordapp.com/attachments/140007341880901632/156721710458994690/Cc5mixjUYAADgBs.jpg",
             "https://cdn.discordapp.com/attachments/140007341880901632/156721715831898113/hqdefault.jpg",
             "https://cdn.discordapp.com/attachments/140007341880901632/156721724430352385/okawari_01_haruka_weird_mask.jpg",
@@ -59,6 +91,7 @@ namespace NadekoBot.Classes.JSONModels {
         public string Games { get; set; } = ">";
         public string Gambling { get; set; } = "$";
         public string Permissions { get; set; } = ";";
+        public string Programming { get; set; } = "%";
     }
 
     public static class ConfigHandler {
@@ -101,5 +134,13 @@ namespace NadekoBot.Classes.JSONModels {
         public override int GetHashCode() {
             return (int)((int)ServerId + Username.Length + (int)Type);
         }
+    }
+
+    public class Quote {
+        public string Author { get; set; }
+        public string Text { get; set; }
+
+        public override string ToString() =>
+            $"{Text}\n\t*-{Author}*";
     }
 }

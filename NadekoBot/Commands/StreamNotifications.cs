@@ -44,11 +44,11 @@ namespace NadekoBot.Commands {
                                       $"**{data.Item2}** viewers.";
                             if (stream.LastStatus)
                                 if (stream.Type == StreamNotificationConfig.StreamType.Hitbox)
-                                    msg += $"\n`Here is the Link:`【http://www.hitbox.tv/{stream.Username}】";
+                                    msg += $"\n`Here is the Link:`【 http://www.hitbox.tv/{stream.Username}/ 】";
                                 else if (stream.Type == StreamNotificationConfig.StreamType.Twitch)
-                                    msg += $"\n`Here is the Link:`【http://www.twitch.tv/{stream.Username}】";
+                                    msg += $"\n`Here is the Link:`【 http://www.twitch.tv/{stream.Username}/ 】";
                                 else if (stream.Type == StreamNotificationConfig.StreamType.YoutubeGaming)
-                                    msg += $"\n`Here is the Link:`【not implemented yet - {stream.Username}】";
+                                    msg += $"\n`Here is the Link:`【 not implemented yet - {stream.Username} 】";
                             await channel.SendMessage(msg);
                         }
                     }
@@ -118,7 +118,7 @@ namespace NadekoBot.Commands {
 
                     NadekoBot.Config.ObservingStreams.Remove(toRemove);
                     ConfigHandler.SaveConfig();
-                    await e.Channel.SendMessage($":ok: Removed `{toRemove.Username}`'s stream from hitbox notifications");
+                    await e.Channel.SendMessage($":ok: Removed `{toRemove.Username}`'s stream from notifications.");
                 });
 
             cgb.CreateCommand(Module.Prefix + "liststreams")
@@ -173,9 +173,9 @@ namespace NadekoBot.Commands {
                 var msg = $"Stream is currently **{(data.Item1 ? "ONLINE" : "OFFLINE")}** with **{data.Item2}** viewers";
                 if (data.Item1)
                     if (type == StreamNotificationConfig.StreamType.Hitbox)
-                        msg += $"\n`Here is the Link:` http://www.hitbox.tv/{stream.Username}";
+                        msg += $"\n`Here is the Link:`【 http://www.hitbox.tv/{stream.Username}/ 】";
                     else if (type == StreamNotificationConfig.StreamType.Twitch)
-                        msg += $"\n`Here is the Link:` http://www.twitch.tv/{stream.Username}";
+                        msg += $"\n`Here is the Link:`【 http://www.twitch.tv/{stream.Username}/ 】";
                     else if (type == StreamNotificationConfig.StreamType.YoutubeGaming)
                         msg += $"\n`Here is the Link:` not implemented yet - {stream.Username}";
                 stream.LastStatus = data.Item1;

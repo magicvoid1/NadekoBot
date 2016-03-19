@@ -28,8 +28,9 @@ namespace NadekoBot.Modules {
 
             manager.CreateCommands("", cgb => {
                 cgb.AddCheck(Classes.Permissions.PermissionChecker.Instance);
-                
+
                 cgb.CreateCommand("e")
+                    .Description("You did it.")
                     .Do(async e => {
                         await e.Channel.SendMessage($"{e.User.Name} did it. 😒 🔫");
                     });
@@ -172,11 +173,14 @@ namespace NadekoBot.Modules {
                   .Description("Pat someone ^_^")
                   .Parameter("user", ParameterType.Unparsed)
                   .Do(async e => {
-                      var user = e.GetArg("user");
-                      if (string.IsNullOrWhiteSpace(user) || !e.Message.MentionedUsers.Any()) return;
+                      var userStr = e.GetArg("user");
+                      if (string.IsNullOrWhiteSpace(userStr) || !e.Message.MentionedUsers.Any()) return;
+                      var user = e.Server.FindUsers(userStr).FirstOrDefault();
+                      if (user == null)
+                          return;
                       try {
                           await e.Channel.SendMessage(
-                                    $"{e.Message.MentionedUsers.First().Mention} " +
+                                    $"{user.Mention} " +
                                     $"{NadekoBot.Config.PatResponses[rng.Next(0, NadekoBot.Config.PatResponses.Length)]}");
                       } catch {
                           await e.Channel.SendMessage("Error while handling PatResponses check your data/config.json");
@@ -305,7 +309,7 @@ namespace NadekoBot.Modules {
                     });
 
                 cgb.CreateCommand("bb")
-                    .Description("Says bye to someone. **Usage**: @NadekoBot bb @X")
+                    .Description("Says bye to someone.\n**Usage**: @NadekoBot bb @X")
                     .Parameter("ppl", ParameterType.Unparsed)
                     .Do(async e => {
                         var str = "Bye";
@@ -375,7 +379,7 @@ namespace NadekoBot.Modules {
 
                 cgb.CreateCommand("av").Alias("avatar")
                     .Parameter("mention", ParameterType.Required)
-                    .Description("Shows a mentioned person's avatar. **Usage**: ~av @X")
+                    .Description("Shows a mentioned person's avatar.\n**Usage**: ~av @X")
                     .Do(async e => {
                         var usr = e.Channel.FindUsers(e.GetArg("mention")).FirstOrDefault();
                         if (usr == null) {

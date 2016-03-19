@@ -15,7 +15,8 @@
     "Trello": "trello",
     "Games": ">",
     "Gambling": "$",
-    "Permissions": ";"
+    "Permissions": ";",
+    "Programming": "%"
   },
   "ServerBlacklist": [],
   "ChannelBlacklist": [],
@@ -23,6 +24,29 @@
     105309315895693312,
     119174277298782216,
     143515953525817344
+  ],
+  "_8BallResponses": [
+    "Most definitely yes",
+    "For sure",
+    "As I see it, yes",
+    "My sources say yes",
+    "Yes",
+    "Most likely",
+    "Perhaps",
+    "Maybe",
+    "Not sure",
+    "It is uncertain",
+    "Ask me again later",
+    "Don't count on it",
+    "Probably not",
+    "Very doubtful",
+    "Most likely no",
+    "Nope",
+    "No",
+    "My sources say no",
+    "Dont even think about it",
+    "Definitely no",
+    "NO - It may cause disease contraction"
   ],
   "DisguiseResponses": [
     "https://cdn.discordapp.com/attachments/140007341880901632/156721710458994690/Cc5mixjUYAADgBs.jpg",

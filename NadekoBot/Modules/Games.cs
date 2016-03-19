@@ -9,7 +9,6 @@ using NadekoBot.Extensions;
 
 namespace NadekoBot.Modules {
     internal class Games : DiscordModule {
-        private readonly string[] _8BallAnswers;
         private readonly Random rng = new Random();
 
         public Games() {
@@ -17,7 +16,6 @@ namespace NadekoBot.Modules {
             commands.Add(new SpeedTyping(this));
             commands.Add(new PollCommand(this));
             //commands.Add(new BetrayGame(this));
-            _8BallAnswers = JArray.Parse(File.ReadAllText("data/8ball.json")).Select(t => t.ToString()).ToArray();
         }
 
         public override string Prefix { get; } = NadekoBot.Config.CommandPrefixes.Games;
@@ -51,12 +49,12 @@ namespace NadekoBot.Modules {
                             return;
                         try {
                             await e.Channel.SendMessage(
-                                $":question: **Question**: `{question}` \n🎱 **8Ball Answers**: `{_8BallAnswers[rng.Next(0, _8BallAnswers.Length)]}`");
+                                $":question: **Question**: `{question}` \n🎱 **8Ball Answers**: `{NadekoBot.Config._8BallResponses[rng.Next(0, NadekoBot.Config._8BallResponses.Length)]}`");
                         } catch { }
                     });
 
                 cgb.CreateCommand(Prefix + "attack")
-                    .Description("Attack a person. Supported attacks: 'splash', 'strike', 'burn', 'surge'.\n**Usage**: > strike @User")
+                    .Description("Attack a person. Supported attacks: 'splash', 'strike', 'burn', 'surge'.\n**Usage**: >attack strike @User")
                     .Parameter("attack_type", Discord.Commands.ParameterType.Required)
                     .Parameter("target", Discord.Commands.ParameterType.Required)
                     .Do(async e => {
@@ -88,6 +86,43 @@ namespace NadekoBot.Modules {
                         }
                         var t = GetType(usr.Id);
                         await e.Channel.SendMessage($"{usr.Name}'s type is {GetImage(t)} {t}");
+                    });
+                cgb.CreateCommand(Prefix + "rps")
+                    .Description("Play a game of rocket paperclip scissors with nadkeo.\n**Usage**: >rps scissors")
+                    .Parameter("input", ParameterType.Required)
+                    .Do(async e => {
+                        var input = e.GetArg("input").Trim();
+                        int pick;
+                        switch (input) {
+                            case "r":
+                            case "rock":
+                            case "rocket":
+                                pick = 0;
+                                break;
+                            case "p":
+                            case "paper":
+                            case "paperclip":
+                                pick = 1;
+                                break;
+                            case "scissors":
+                            case "s":
+                                pick = 2;
+                                break;
+                            default:
+                                return;
+                        }
+                        var nadekoPick = new Random().Next(0, 3);
+                        var msg = "";
+                        if (pick == nadekoPick)
+                            msg = $"It's a draw! Both picked :{GetRPSPick(pick)}:";
+                        else if ((pick == 0 && nadekoPick == 1) ||
+                                 (pick == 1 && nadekoPick == 2) ||
+                                 (pick == 2 && nadekoPick == 0))
+                            msg = $"{NadekoBot.BotMention} won! :{GetRPSPick(nadekoPick)}: beats :{GetRPSPick(pick)}:";
+                        else
+                            msg = $"{e.User.Mention} won! :{GetRPSPick(pick)}: beats :{GetRPSPick(nadekoPick)}:";
+
+                        await e.Channel.SendMessage(msg);
                     });
 
                 cgb.CreateCommand(Prefix + "linux")
@@ -193,6 +228,15 @@ There really is a {loonix}, and these people are using it, but it is just a part
 
         private enum PokeType {
             WATER, GRASS, FIRE, ELECTRICAL
+        }
+
+        private string GetRPSPick(int i) {
+            if (i == 0)
+                return "rocket";
+            else if (i == 1)
+                return "paperclip";
+            else
+                return "scissors";
         }
     }
 }
