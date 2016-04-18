@@ -1,29 +1,36 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
-using Newtonsoft.Json;
 
-namespace NadekoBot.Classes {
-    internal class SpecificConfigurations {
+namespace NadekoBot.Classes
+{
+    internal class SpecificConfigurations
+    {
         public static SpecificConfigurations Default { get; } = new SpecificConfigurations();
-        public static bool Instantiated { get; set; } = false;
+        public static bool Instantiated { get; private set; }
 
         private const string filePath = "data/ServerSpecificConfigs.json";
 
         static SpecificConfigurations() { }
 
-        private SpecificConfigurations() {
+        private SpecificConfigurations()
+        {
 
-            if (File.Exists(filePath)) {
-                try {
+            if (File.Exists(filePath))
+            {
+                try
+                {
                     configs = JsonConvert
                         .DeserializeObject<ConcurrentDictionary<ulong, ServerSpecificConfig>>(
                             File.ReadAllText(filePath));
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     Console.WriteLine($"Deserialization failing: {ex}");
                 }
             }
@@ -34,19 +41,24 @@ namespace NadekoBot.Classes {
 
         private readonly ConcurrentDictionary<ulong, ServerSpecificConfig> configs;
 
+        public IEnumerable<ServerSpecificConfig> AllConfigs => configs.Values;
+
         public ServerSpecificConfig Of(ulong id) =>
             configs.GetOrAdd(id, _ => new ServerSpecificConfig());
 
         private readonly object saveLock = new object();
 
-        public void Save() {
-            lock (saveLock) {
+        public void Save()
+        {
+            lock (saveLock)
+            {
                 File.WriteAllText(filePath, JsonConvert.SerializeObject(configs, Formatting.Indented));
             }
         }
     }
 
-    internal class ServerSpecificConfig : INotifyPropertyChanged {
+    internal class ServerSpecificConfig : INotifyPropertyChanged
+    {
         [JsonProperty("VoicePlusTextEnabled")]
         private bool voicePlusTextEnabled;
         [JsonIgnore]
@@ -75,22 +87,68 @@ namespace NadekoBot.Classes {
             set {
                 listOfSelfAssignableRoles = value;
                 if (value != null)
-                    listOfSelfAssignableRoles.CollectionChanged += (s, e) => {
+                    listOfSelfAssignableRoles.CollectionChanged += (s, e) =>
+                    {
                         if (!SpecificConfigurations.Instantiated) return;
                         OnPropertyChanged();
                     };
             }
         }
 
-        public ServerSpecificConfig() {
+        [JsonIgnore]
+        private ObservableCollection<StreamNotificationConfig> observingStreams;
+        public ObservableCollection<StreamNotificationConfig> ObservingStreams {
+            get { return observingStreams; }
+            set {
+                observingStreams = value;
+                if (value != null)
+                    observingStreams.CollectionChanged += (s, e) =>
+                    {
+                        if (!SpecificConfigurations.Instantiated) return;
+                        OnPropertyChanged();
+                    };
+            }
+        }
+
+        public ServerSpecificConfig()
+        {
             ListOfSelfAssignableRoles = new ObservableCollection<ulong>();
+            ObservingStreams = new ObservableCollection<StreamNotificationConfig>();
         }
 
         public event PropertyChangedEventHandler PropertyChanged = delegate { SpecificConfigurations.Default.Save(); };
 
-        private void OnPropertyChanged([CallerMemberName] string propertyName = null) {
+        private void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
             Console.WriteLine("property changed");
             PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    public class StreamNotificationConfig : IEquatable<StreamNotificationConfig>
+    {
+        public string Username { get; set; }
+        public StreamType Type { get; set; }
+        public ulong ServerId { get; set; }
+        public ulong ChannelId { get; set; }
+        public bool LastStatus { get; set; }
+
+        public enum StreamType
+        {
+            Twitch,
+            Beam,
+            Hitbox,
+            YoutubeGaming
+        }
+
+        public bool Equals(StreamNotificationConfig other) =>
+            this.Username.ToLower().Trim() == other.Username.ToLower().Trim() &&
+            this.Type == other.Type &&
+            this.ServerId == other.ServerId;
+
+        public override int GetHashCode()
+        {
+            return (int)((int)ServerId + Username.Length + (int)Type);
         }
     }
 }
